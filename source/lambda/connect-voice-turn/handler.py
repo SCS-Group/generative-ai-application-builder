@@ -120,13 +120,14 @@ def _update_conversation_kpi(
     Update a per-conversation KPI record. Avoid storing raw transcripts (PII).
     """
     now = _now_iso()
-    update_expr = [
-        "SET UseCaseId = :uc",
-        "SET Channel = :ch",
-        "SET LastUpdatedAt = :now",
-        "SET StartedAt = if_not_exists(StartedAt, :now)",
-        "SET TTL = if_not_exists(TTL, :ttl)",
-        "SET LastLatencyMs = :lat",
+    set_parts = [
+        "UseCaseId = :uc",
+        "Channel = :ch",
+        "LastUpdatedAt = :now",
+        "StartedAt = if_not_exists(StartedAt, :now)",
+        "TTL = if_not_exists(TTL, :ttl)",
+        "LastLatencyMs = :lat",
+        "Ended = :ended",
     ]
     expr_vals: Dict[str, Any] = {
         ":uc": {"S": use_case_id},
@@ -139,22 +140,19 @@ def _update_conversation_kpi(
     }
 
     # turn counter
-    update_expr.append("ADD TurnCount :one")
-
-    update_expr.append("SET Ended = :ended")
     if ended:
-        update_expr.append("SET EndedAt = :now")
+        set_parts.append("EndedAt = :now")
     if end_reason:
-        update_expr.append("SET EndReason = :endReason")
+        set_parts.append("EndReason = :endReason")
         expr_vals[":endReason"] = {"S": str(end_reason)[:200]}
     if error_message:
-        update_expr.append("SET LastError = :err")
+        set_parts.append("LastError = :err")
         expr_vals[":err"] = {"S": str(error_message)[:500]}
 
     _ddb.update_item(
         TableName=VOICE_CONVERSATIONS_TABLE_NAME,
         Key={"TenantId": {"S": tenant_id}, "ConversationId": {"S": conversation_id}},
-        UpdateExpression=" ".join(update_expr),
+        UpdateExpression=f"SET {', '.join(set_parts)} ADD TurnCount :one",
         ExpressionAttributeValues=expr_vals,
     )
 
