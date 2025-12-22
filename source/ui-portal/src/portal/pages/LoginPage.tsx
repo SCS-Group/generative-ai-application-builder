@@ -7,6 +7,7 @@ import { Input } from '@/portal/ui/Input';
 import { Label } from '@/portal/ui/Label';
 import { Alert } from '@/portal/ui/Alert';
 import { useTheme } from '@/portal/theme/ThemeProvider';
+import { Eye, EyeOff } from 'lucide-react';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -106,31 +107,35 @@ export function LoginPage() {
                       autoComplete="username"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      placeholder="your.username"
+                      placeholder="Username"
                       disabled={isSubmitting}
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="password">Password</Label>
+                    <Label htmlFor="password">Password</Label>
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? 'text' : 'password'}
+                        autoComplete="current-password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Password"
+                        disabled={isSubmitting}
+                        className="pr-10"
+                      />
                       <button
                         type="button"
-                        className="text-xs text-muted-foreground hover:underline"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground hover:text-foreground"
                         onClick={() => setShowPassword((s) => !s)}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        title={showPassword ? 'Hide password' : 'Show password'}
+                        disabled={isSubmitting}
                       >
-                        {showPassword ? 'Hide' : 'Show'}
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
-                    <Input
-                      id="password"
-                      type={showPassword ? 'text' : 'password'}
-                      autoComplete="current-password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Enter your password"
-                      disabled={isSubmitting}
-                    />
                   </div>
 
                   <Button className="w-full" type="submit" disabled={!canSubmit || isSubmitting}>
