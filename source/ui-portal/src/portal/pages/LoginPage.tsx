@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Auth } from 'aws-amplify';
 import { Card, CardContent, CardHeader, CardTitle } from '@/portal/ui/Card';
@@ -6,10 +6,11 @@ import { Button } from '@/portal/ui/Button';
 import { Input } from '@/portal/ui/Input';
 import { Label } from '@/portal/ui/Label';
 import { Alert } from '@/portal/ui/Alert';
-import { ThemeToggle } from '@/portal/theme/ThemeToggle';
+import { useTheme } from '@/portal/theme/ThemeProvider';
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const { setTheme } = useTheme();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [pendingUser, setPendingUser] = useState<any | null>(null);
@@ -18,6 +19,11 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    // Per requirement: default login experience to dark (and remove toggle).
+    setTheme('dark');
+  }, [setTheme]);
 
   const canSubmit = useMemo(() => username.trim().length > 0 && password.length > 0, [username, password]);
   const canSubmitNewPassword = useMemo(() => {
@@ -77,27 +83,16 @@ export function LoginPage() {
     <div className="min-h-screen bg-background">
       <div className="mx-auto flex min-h-screen max-w-5xl items-center justify-center px-6">
         <div className="w-full max-w-md">
-          <div className="mb-6 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg border border-border bg-muted" />
-              <div className="leading-tight">
-                <div className="text-sm font-semibold tracking-wide text-foreground">
-                  AiAgentsWorkforce
-                </div>
-                <div className="text-xs text-muted-foreground">Customer Portal</div>
-              </div>
-            </div>
-            <ThemeToggle />
-          </div>
-
           <Card>
             <CardHeader>
-              <CardTitle>{pendingUser ? 'Set a new password' : 'Sign in'}</CardTitle>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {pendingUser
-                  ? 'Your account needs a permanent password before you can continue.'
-                  : 'Access your agents, channels, and usage.'}
-              </p>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg border border-border bg-muted" />
+                <div className="leading-tight">
+                  <div className="text-sm font-semibold tracking-wide text-foreground">AiAgentsWorkforce</div>
+                  <div className="text-xs text-muted-foreground">Customer Portal</div>
+                </div>
+              </div>
+              {pendingUser && <CardTitle className="mt-4">Set a new password</CardTitle>}
             </CardHeader>
             <CardContent>
               {error && <Alert variant="error">{error}</Alert>}
@@ -105,13 +100,13 @@ export function LoginPage() {
               {!pendingUser ? (
                 <form className="mt-4 space-y-4" onSubmit={onSubmit}>
                   <div className="space-y-2">
-                    <Label htmlFor="username">Email or username</Label>
+                    <Label htmlFor="username">Username</Label>
                     <Input
                       id="username"
                       autoComplete="username"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      placeholder="you@company.com"
+                      placeholder="your.username"
                       disabled={isSubmitting}
                     />
                   </div>
@@ -139,8 +134,19 @@ export function LoginPage() {
                   </div>
 
                   <Button className="w-full" type="submit" disabled={!canSubmit || isSubmitting}>
-                    {isSubmitting ? 'Signing in…' : 'Sign in'}
+                    {isSubmitting ? 'Signing in…' : 'Continue'}
                   </Button>
+
+                  <div className="text-center text-xs text-muted-foreground">
+                    By signing in you agree to our{' '}
+                    <a href="#" className="underline underline-offset-4 hover:text-foreground">
+                      terms and condition
+                    </a>
+                    .
+                  </div>
+                  <div className="text-center text-xs text-muted-foreground">
+                    Trouble signing in? Contact your admin to reset your password.
+                  </div>
                 </form>
               ) : (
                 <form className="mt-4 space-y-4" onSubmit={onCompleteNewPassword}>
@@ -196,21 +202,6 @@ export function LoginPage() {
                   </Button>
                 </form>
               )}
-
-              <div className="mt-6 border-t border-border pt-4">
-                <div className="text-xs text-muted-foreground">If your tenant uses SSO/Hosted UI:</div>
-                <Button
-                  className="mt-2 w-full"
-                  variant="secondary"
-                  onClick={() => Auth.federatedSignIn()}
-                  disabled={isSubmitting}
-                >
-                  Sign in with browser
-                </Button>
-                <div className="mt-3 text-xs text-muted-foreground">
-                  Trouble signing in? Contact your admin to reset your password.
-                </div>
-              </div>
             </CardContent>
           </Card>
         </div>
