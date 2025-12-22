@@ -223,7 +223,10 @@ async function getVoiceUsage(event: APIGatewayEvent): Promise<any> {
                     RequestItems: {
                         [useCasesTable]: {
                             Keys: chunk.map((id) => ({ UseCaseId: id })),
-                            ProjectionExpression: 'UseCaseId, UseCaseName, Name'
+                            ProjectionExpression: 'UseCaseId, UseCaseName, #n',
+                            ExpressionAttributeNames: {
+                                '#n': 'Name'
+                            }
                         }
                     }
                 })
