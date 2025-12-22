@@ -177,7 +177,11 @@ export class DeploymentPlatformRestEndpoint extends BaseRestEndpoint {
             'method.request.querystring.days': false
         };
 
-        voice.addMethod('GET', ctx.integration, DeploymentRestApiHelper.createMethodOptions(ctx, 'GetVoiceUsage', queryParams));
+        voice.addMethod(
+            'GET',
+            ctx.integration,
+            DeploymentRestApiHelper.createMethodOptionsWithModels(ctx, 'GetVoiceUsage', undefined, undefined, queryParams)
+        );
         this.createdResources.push(usage, voice);
     }
 
