@@ -31,6 +31,9 @@ codebuild_build.sh
 
 .idea/**
 
+# Cursor IDE project files
+.cursor/**
+
 aws_lambda_powertools/
 aws_xray_sdk/
 boto3/
