@@ -30,6 +30,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Paths filter
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            ui_portal:
+              - 'source/ui-portal/**'
+            ui_deployment:
+              - 'source/ui-deployment/**'
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -64,6 +74,7 @@ jobs:
           node-version: "20"
 
       - name: Build ui-portal
+        if: steps.filter.outputs.ui_portal == 'true'
         shell: bash
         working-directory: source/ui-portal
         run: |
@@ -72,6 +83,7 @@ jobs:
           npm run build --silent
 
       - name: Publish ui-portal (S3 + runtimeConfig + invalidation)
+        if: steps.filter.outputs.ui_portal == 'true'
         shell: bash
         working-directory: source/ui-portal
         env:
@@ -99,6 +111,7 @@ jobs:
           aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/*" >/dev/null
 
       - name: Build ui-deployment
+        if: steps.filter.outputs.ui_deployment == 'true'
         shell: bash
         working-directory: source/ui-deployment
         run: |
@@ -107,6 +120,7 @@ jobs:
           npm run build --silent
 
       - name: Publish ui-deployment (S3 + runtimeConfig + invalidation)
+        if: steps.filter.outputs.ui_deployment == 'true'
         shell: bash
         working-directory: source/ui-deployment
         env:
