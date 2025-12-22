@@ -319,15 +319,34 @@ def handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             close=True,
         )
 
+    # Persist stable IDs across turns (and write a KPI record as early as possible).
+    # Note: Connect call duration != agent "active time". This KPI table tracks agent activity per turn.
+    conversation_id = (attrs.get("conversationId") or event.get("sessionId") or f"lex-{int(time.time())}").strip()
+    user_id = (attrs.get("userId") or event.get("sessionId") or "lex-user").strip()
+
+    # Best-effort "turn start" KPI write: ensures we at least have a record for any call that reaches this Lambda.
+    try:
+        _update_conversation_kpi(
+            tenant_id=tenant_id or "UNKNOWN",
+            conversation_id=conversation_id,
+            use_case_id=use_case_id,
+            ended=False,
+            end_reason=None,
+            error_message=None,
+            latency_ms=0,
+        )
+    except Exception as e:
+        # Don't break the call, but do log so issues aren't silent.
+        print(json.dumps({"msg": "kpi_write_failed", "stage": "turn_start", "error": str(e)[:500]}))
+
     # End call if the user indicates they're done. We also add a Lex intent for this and route it to Disconnect in Connect.
     intent_name = (_get_lex_intent(event).get("name") or "").strip()
     if intent_name == "EndCallIntent" or _is_end_call(input_text):
         # Best-effort KPI update
         try:
-            conv_id = (attrs.get("conversationId") or event.get("sessionId") or f"lex-{int(time.time())}").strip()
             _update_conversation_kpi(
                 tenant_id=tenant_id or "UNKNOWN",
-                conversation_id=conv_id,
+                conversation_id=conversation_id,
                 use_case_id=use_case_id,
                 ended=True,
                 end_reason="user_end",
@@ -335,8 +354,8 @@ def handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
                 latency_ms=0,
             )
             _emit_emf("EndCallCount", 1, {"UseCaseId": use_case_id, "TenantId": tenant_id or "UNKNOWN"})
-        except Exception:
-            pass
+        except Exception as e:
+            print(json.dumps({"msg": "kpi_write_failed", "stage": "end_call", "error": str(e)[:500]}))
         return _lex_response(event=event, content="You're welcome. Goodbye.", close=True, session_attributes=attrs)
 
     # Resolve deployment stack and ensure tenant matches (when provided)
@@ -351,9 +370,6 @@ def handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     stack_id = resolved["stackId"]
     agent_runtime_arn = _get_agent_runtime_arn_from_stack(stack_id)
 
-    # Persist stable IDs across turns
-    conversation_id = (attrs.get("conversationId") or event.get("sessionId") or f"lex-{int(time.time())}").strip()
-    user_id = (attrs.get("userId") or event.get("sessionId") or "lex-user").strip()
     message_id = f"lex-{int(time.time() * 1000)}"
 
     payload = {
@@ -364,18 +380,35 @@ def handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     }
 
     start = time.time()
-    resp = _agentcore.invoke_agent_runtime(
-        agentRuntimeArn=agent_runtime_arn,
-        payload=json.dumps(payload).encode("utf-8"),
-        contentType="application/json",
-        accept="application/json",
-        runtimeUserId=user_id,
-        runtimeSessionId=_stable_runtime_session_id(conversation_id, user_id),
-    )
-
-    text = _extract_text_from_agentcore_response(resp).strip()
-    if not text:
-        text = "I couldn’t generate a response. Please try again."
+    try:
+        resp = _agentcore.invoke_agent_runtime(
+            agentRuntimeArn=agent_runtime_arn,
+            payload=json.dumps(payload).encode("utf-8"),
+            contentType="application/json",
+            accept="application/json",
+            runtimeUserId=user_id,
+            runtimeSessionId=_stable_runtime_session_id(conversation_id, user_id),
+        )
+        text = _extract_text_from_agentcore_response(resp).strip()
+        if not text:
+            text = "I couldn’t generate a response. Please try again."
+    except Exception as e:
+        # Capture agentcore errors but keep the call alive with a friendly response.
+        text = "I ran into an error while processing that. Please try again."
+        try:
+            _emit_emf("TurnErrorCount", 1, {"UseCaseId": use_case_id, "TenantId": resolved["tenantId"] or "UNKNOWN"})
+            _update_conversation_kpi(
+                tenant_id=resolved["tenantId"] or "UNKNOWN",
+                conversation_id=conversation_id,
+                use_case_id=use_case_id,
+                ended=False,
+                end_reason=None,
+                error_message=str(e),
+                latency_ms=int((time.time() - start) * 1000),
+            )
+        except Exception as e2:
+            print(json.dumps({"msg": "kpi_write_failed", "stage": "agentcore_exception", "error": str(e2)[:500]}))
+        return _lex_response(event=event, content=text, close=False, session_attributes=attrs)
 
     latency_ms = int((time.time() - start) * 1000)
     # Metrics + KPI record (best-effort)
@@ -398,8 +431,8 @@ def handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             error_message=err,
             latency_ms=latency_ms,
         )
-    except Exception:
-        pass
+    except Exception as e:
+        print(json.dumps({"msg": "kpi_write_failed", "stage": "turn_end", "error": str(e)[:500]}))
 
     # Keep routing + conversation context in session attributes
     attrs["tenantId"] = resolved["tenantId"] or tenant_id
