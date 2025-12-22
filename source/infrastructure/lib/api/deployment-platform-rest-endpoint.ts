@@ -140,6 +140,9 @@ export class DeploymentPlatformRestEndpoint extends BaseRestEndpoint {
 
         this.createBaseDeploymentsAPI(deploymentsResource, props, restApi);
 
+        // Customer portal usage API (voice KPIs): GET /usage/voice
+        this.createUsageApi(props, restApi);
+
         // Create MCP deployments API
         this.createMCPPathAPI(deploymentsResource, props, restApi);
 
@@ -148,6 +151,38 @@ export class DeploymentPlatformRestEndpoint extends BaseRestEndpoint {
 
         // Create Workflows API
         this.createWorkflowsPathAPI(deploymentsResource, props, restApi);
+    }
+
+    /**
+     * Creates customer portal usage endpoints:
+     * - GET /usage/voice
+     */
+    private createUsageApi(props: DeploymentPlatformRestEndpointProps, restApi: api.IRestApi) {
+        const useCaseManagementAPILambdaIntegration = new api.LambdaIntegration(props.useCaseManagementAPILambda, {
+            passthroughBehavior: api.PassthroughBehavior.NEVER
+        });
+
+        const usage = restApi.root.addResource('usage');
+        const voice = usage.addResource('voice');
+        DeploymentRestApiHelper.configureCors(voice, ['GET', 'OPTIONS']);
+
+        const ctx: DeploymentApiContext = {
+            scope: this,
+            requestValidator: this.requestValidator,
+            authorizer: props.deploymentPlatformAuthorizer,
+            integration: useCaseManagementAPILambdaIntegration
+        };
+
+        const queryParams = {
+            'method.request.querystring.days': false
+        };
+
+        voice.addMethod(
+            'GET',
+            ctx.integration,
+            DeploymentRestApiHelper.createMethodOptionsWithModels(ctx, 'GetVoiceUsage', undefined, undefined, queryParams)
+        );
+        this.createdResources.push(usage, voice);
     }
 
     /**

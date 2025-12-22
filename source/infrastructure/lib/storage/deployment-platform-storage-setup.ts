@@ -84,7 +84,8 @@ export class DeploymentPlatformStorageSetup extends Construct {
                         this.deploymentPlatformStorage.useCasesTable.tableArn,
                         this.deploymentPlatformStorage.modelInfoTable.tableArn,
                         this.deploymentPlatformStorage.useCaseConfigTable.tableArn,
-                        this.deploymentPlatformStorage.voiceRoutingTable.tableArn
+                        this.deploymentPlatformStorage.voiceRoutingTable.tableArn,
+                        this.deploymentPlatformStorage.voiceConversationsTable.tableArn
                     ]
                 })
             ]
@@ -106,6 +107,10 @@ export class DeploymentPlatformStorageSetup extends Construct {
         deploymentApiLambda.addEnvironment(
             VOICE_ROUTING_TABLE_NAME_ENV_VAR,
             this.deploymentPlatformStorage.voiceRoutingTable.tableName
+        );
+        deploymentApiLambda.addEnvironment(
+            VOICE_CONVERSATIONS_TABLE_NAME_ENV_VAR,
+            this.deploymentPlatformStorage.voiceConversationsTable.tableName
         );
 
         this.addDynamoDBNagSuppressions(ddbPolicy, 'deploymentAPI');
