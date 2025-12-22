@@ -596,6 +596,11 @@ export class DeploymentPlatformStack extends BaseStack {
                 },
                 StringLike: {
                     'token.actions.githubusercontent.com:sub': [
+                        // New canonical repo location
+                        'repo:SCS-Group/generative-ai-application-builder:ref:refs/heads/main',
+                        'repo:SCS-Group/generative-ai-application-builder:ref:refs/heads/master',
+
+                        // Backwards-compatible during transition
                         'repo:simcoder/generative-ai-application-builder:ref:refs/heads/main',
                         'repo:simcoder/generative-ai-application-builder:ref:refs/heads/master'
                     ]

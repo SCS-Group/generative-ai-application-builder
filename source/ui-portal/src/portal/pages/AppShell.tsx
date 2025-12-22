@@ -5,6 +5,16 @@ import { cn } from '@/portal/lib/cn';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTheme } from '@/portal/theme/ThemeProvider';
 import { Input } from '@/portal/ui/Input';
+import {
+  Settings as SettingsIcon,
+  Sun as SunIcon,
+  Moon as MoonIcon,
+  Monitor as MonitorIcon,
+  Copy as CopyIcon,
+  User as UserIcon,
+  Menu as MenuIcon,
+  X as CloseIcon
+} from 'lucide-react';
 
 const navItems = [
   { to: '/app/agents', label: 'Agents' },
@@ -21,105 +31,21 @@ function Icon({
   const common = cn('h-4 w-4', className);
   switch (name) {
     case 'gear':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"
-            stroke="currentColor"
-            strokeWidth="2"
-          />
-          <path
-            d="M19.4 15a7.97 7.97 0 0 0 .1-1 7.97 7.97 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a8.1 8.1 0 0 0-1.7-1l-.4-2.6H9.1l-.4 2.6a8.1 8.1 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.97 7.97 0 0 0-.1 1c0 .34.03.67.1 1l-2 1.6 2 3.4 2.4-1c.54.4 1.1.74 1.7 1l.4 2.6h5.8l.4-2.6c.6-.26 1.16-.6 1.7-1l2.4 1 2-3.4-2-1.6Z"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
-        </svg>
-      );
+      return <SettingsIcon className={common} aria-hidden="true" />;
     case 'sun':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12Z"
-            stroke="currentColor"
-            strokeWidth="2"
-          />
-          <path
-            d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5 3.6 3.6M20.4 20.4 19 19M19 5l1.4-1.4M3.6 20.4 5 19"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-        </svg>
-      );
+      return <SunIcon className={common} aria-hidden="true" />;
     case 'moon':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M21 14.5A8.5 8.5 0 0 1 9.5 3a7 7 0 1 0 11.5 11.5Z"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
-        </svg>
-      );
+      return <MoonIcon className={common} aria-hidden="true" />;
     case 'monitor':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M4 5h16v11H4V5Z"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
-          <path d="M8 20h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        </svg>
-      );
+      return <MonitorIcon className={common} aria-hidden="true" />;
     case 'copy':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M9 9h10v10H9V9Z"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-        </svg>
-      );
+      return <CopyIcon className={common} aria-hidden="true" />;
     case 'user':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"
-            stroke="currentColor"
-            strokeWidth="2"
-          />
-          <path
-            d="M20 20a8 8 0 1 0-16 0"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-        </svg>
-      );
+      return <UserIcon className={common} aria-hidden="true" />;
     case 'menu':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        </svg>
-      );
+      return <MenuIcon className={common} aria-hidden="true" />;
     case 'close':
-      return (
-        <svg className={common} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-        </svg>
-      );
+      return <CloseIcon className={common} aria-hidden="true" />;
   }
 }
 
@@ -229,7 +155,18 @@ function UserMenu() {
             <button
               type="button"
               className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-muted"
-              onClick={() => Auth.signOut()}
+              onClick={async () => {
+                setOpen(false);
+                try {
+                  // Use global sign-out to be robust across Hosted UI / federated sessions.
+                  await Auth.signOut({ global: true } as any);
+                } catch {
+                  // ignore - we'll still force navigation below
+                } finally {
+                  // The App component only checks auth on initial mount; force a reload to reflect signed-out state.
+                  window.location.assign('/');
+                }
+              }}
             >
               Log out
             </button>
