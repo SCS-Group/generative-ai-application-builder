@@ -211,7 +211,9 @@ export class RestRequestProcessor extends RequestProcessor {
             this.deploymentRestEndpoint.restApi.arnForExecuteApi('GET', '/deployments/workflows', '*'),
             this.deploymentRestEndpoint.restApi.arnForExecuteApi('GET', '/deployments/workflows/*', '*'),
             this.deploymentRestEndpoint.restApi.arnForExecuteApi('GET', '/deployments/mcp', '*'),
-            this.deploymentRestEndpoint.restApi.arnForExecuteApi('GET', '/deployments/mcp/*', '*')
+            this.deploymentRestEndpoint.restApi.arnForExecuteApi('GET', '/deployments/mcp/*', '*'),
+            // Customer portal usage (voice KPIs)
+            this.deploymentRestEndpoint.restApi.arnForExecuteApi('GET', '/usage/voice', '*')
         ];
         const cognitoCustomerGroupPolicyCustomResource = new cdk.CustomResource(
             this,
