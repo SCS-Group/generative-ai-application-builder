@@ -18,9 +18,31 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Detect changed UI(s)
+    runs-on: ubuntu-latest
+    outputs:
+      ui_portal: ${{ steps.filter.outputs.ui_portal }}
+      ui_deployment: ${{ steps.filter.outputs.ui_deployment }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Paths filter
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            ui_portal:
+              - 'source/ui-portal/**'
+            ui_deployment:
+              - 'source/ui-deployment/**'
+
   ui-portal:
     name: ui-portal (build + test)
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.ui_portal == 'true'
     defaults:
       run:
         shell: bash
@@ -48,6 +70,8 @@ jobs:
   ui-deployment:
     name: ui-deployment (build + test)
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.ui_deployment == 'true'
     defaults:
       run:
         shell: bash

@@ -24,7 +24,8 @@ function applyThemeClass(resolved: 'light' | 'dark') {
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = React.useState<Theme>(() => {
     const saved = localStorage.getItem(STORAGE_KEY) as Theme | null;
-    return saved ?? 'system';
+    // Default to dark for the portal (users can still change later in Settings).
+    return saved ?? 'dark';
   });
 
   const resolvedTheme = React.useMemo<'light' | 'dark'>(() => {
