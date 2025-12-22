@@ -125,7 +125,7 @@ def _update_conversation_kpi(
         "Channel = :ch",
         "LastUpdatedAt = :now",
         "StartedAt = if_not_exists(StartedAt, :now)",
-        "TTL = if_not_exists(TTL, :ttl)",
+        "#ttl = if_not_exists(#ttl, :ttl)",
         "LastLatencyMs = :lat",
         "Ended = :ended",
     ]
@@ -153,6 +153,7 @@ def _update_conversation_kpi(
         TableName=VOICE_CONVERSATIONS_TABLE_NAME,
         Key={"TenantId": {"S": tenant_id}, "ConversationId": {"S": conversation_id}},
         UpdateExpression=f"SET {', '.join(set_parts)} ADD TurnCount :one",
+        ExpressionAttributeNames={"#ttl": "TTL"},
         ExpressionAttributeValues=expr_vals,
     )
 
