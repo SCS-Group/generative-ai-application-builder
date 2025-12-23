@@ -25,6 +25,7 @@ export function UsagePage() {
 
   const totals = data?.totals;
   const hasData = (totals?.calls ?? 0) > 0;
+  const currency = useMemo(() => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }), []);
 
   const dayLabel = useMemo(() => {
     if (days === 1) return 'Last 24 hours';
@@ -84,6 +85,15 @@ export function UsagePage() {
                 <div className="mt-1 text-xl font-semibold">{totals?.totalDurationMinutes ?? 0}</div>
               </div>
               <div className="rounded-lg border border-border p-3">
+                <div className="text-xs text-muted-foreground">Estimated cost</div>
+                <div className="mt-1 text-xl font-semibold">
+                  {totals?.pricing?.estimatedCostUsd != null ? currency.format(totals.pricing.estimatedCostUsd) : '—'}
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  {totals?.pricing?.ratePerMinuteUsd != null ? `${currency.format(totals.pricing.ratePerMinuteUsd)}/min` : 'Pricing not configured'}
+                </div>
+              </div>
+              <div className="rounded-lg border border-border p-3">
                 <div className="text-xs text-muted-foreground">Avg duration</div>
                 <div className="mt-1 text-xl font-semibold">{totals?.avgDurationSec ?? 0}s</div>
               </div>
@@ -117,13 +127,17 @@ export function UsagePage() {
                     <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
                       <span>{u.calls} calls</span>
                       <span>•</span>
-                      <span>{Math.round(u.totalDurationSec / 60)} min</span>
+                      <span>{u.totalDurationSec > 0 ? Math.max(1, Math.ceil(u.totalDurationSec / 60)) : 0} min</span>
                       <span>•</span>
                       <span>{u.avgDurationSec}s avg</span>
                       <span>•</span>
                       <span>{u.avgTurns} turns avg</span>
                       <span>•</span>
                       <span>{u.avgLatencyMs}ms avg</span>
+                      <span>•</span>
+                      <span>
+                        {u.pricing?.ratePerMinuteUsd != null ? `${currency.format(u.pricing.ratePerMinuteUsd)}/min` : '—/min'}
+                      </span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

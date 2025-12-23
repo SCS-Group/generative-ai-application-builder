@@ -463,7 +463,16 @@ export class UseCaseManagement extends BaseNestedStack {
                     isInternalUserCondition.logicalId,
                     'true',
                     'false'
-                ).toString()
+                ).toString(),
+                // Blended voice pricing config (JSON). Tune per model/agent; defaults are intentionally empty.
+                VOICE_PRICING_CONFIG_JSON: JSON.stringify({
+                    marginPct: 0.5,
+                    connectPerMinuteUsd: 0.0,
+                    lexPerTurnUsd: 0.0,
+                    lambdaPerTurnUsd: 0.0,
+                    infraPerMinuteUsd: 0.0,
+                    models: {}
+                })
             },
             deadLetterQueue: this.dlq
         });
