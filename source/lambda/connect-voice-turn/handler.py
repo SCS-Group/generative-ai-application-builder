@@ -19,6 +19,7 @@ import json
 import os
 import time
 import hashlib
+import math
 from typing import Any, Dict, Optional
 
 import boto3
@@ -83,6 +84,16 @@ def _now_iso() -> str:
 def _ttl_epoch(days: int) -> int:
     return int(time.time()) + (days * 24 * 60 * 60)
 
+def _approx_tokens(text: str) -> int:
+    """
+    Cheap, model-agnostic token estimate for pricing guardrails.
+    Rough heuristic: ~4 chars/token (English). This intentionally overestimates slightly in practice.
+    """
+    t = (text or "").strip()
+    if not t:
+        return 0
+    return max(1, int(math.ceil(len(t) / 4.0)))
+
 def _emit_emf(metric_name: str, value: float, dims: Dict[str, str]) -> None:
     """
     Emit CloudWatch Embedded Metrics Format (no PutMetricData permission needed).
@@ -115,6 +126,10 @@ def _update_conversation_kpi(
     end_reason: Optional[str],
     error_message: Optional[str],
     latency_ms: int,
+    input_chars: int = 0,
+    output_chars: int = 0,
+    approx_input_tokens: int = 0,
+    approx_output_tokens: int = 0,
 ) -> None:
     """
     Update a per-conversation KPI record. Avoid storing raw transcripts (PII).
@@ -137,6 +152,10 @@ def _update_conversation_kpi(
         ":lat": {"N": str(latency_ms)},
         ":one": {"N": "1"},
         ":ended": {"BOOL": bool(ended)},
+        ":inChars": {"N": str(max(0, int(input_chars)))},
+        ":outChars": {"N": str(max(0, int(output_chars)))},
+        ":inTok": {"N": str(max(0, int(approx_input_tokens)))},
+        ":outTok": {"N": str(max(0, int(approx_output_tokens)))},
     }
 
     # turn counter
@@ -152,7 +171,7 @@ def _update_conversation_kpi(
     _ddb.update_item(
         TableName=VOICE_CONVERSATIONS_TABLE_NAME,
         Key={"TenantId": {"S": tenant_id}, "ConversationId": {"S": conversation_id}},
-        UpdateExpression=f"SET {', '.join(set_parts)} ADD TurnCount :one",
+        UpdateExpression=f"SET {', '.join(set_parts)} ADD TurnCount :one, InputChars :inChars, OutputChars :outChars, ApproxInputTokens :inTok, ApproxOutputTokens :outTok",
         ExpressionAttributeNames={"#ttl": "TTL"},
         ExpressionAttributeValues=expr_vals,
     )
@@ -334,6 +353,10 @@ def handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             end_reason=None,
             error_message=None,
             latency_ms=0,
+            input_chars=len(input_text),
+            output_chars=0,
+            approx_input_tokens=_approx_tokens(input_text),
+            approx_output_tokens=0,
         )
     except Exception as e:
         # Don't break the call, but do log so issues aren't silent.
@@ -352,6 +375,10 @@ def handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
                 end_reason="user_end",
                 error_message=None,
                 latency_ms=0,
+                input_chars=len(input_text),
+                output_chars=0,
+                approx_input_tokens=_approx_tokens(input_text),
+                approx_output_tokens=0,
             )
             _emit_emf("EndCallCount", 1, {"UseCaseId": use_case_id, "TenantId": tenant_id or "UNKNOWN"})
         except Exception as e:
@@ -405,6 +432,10 @@ def handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
                 end_reason=None,
                 error_message=str(e),
                 latency_ms=int((time.time() - start) * 1000),
+                input_chars=len(input_text),
+                output_chars=0,
+                approx_input_tokens=_approx_tokens(input_text),
+                approx_output_tokens=0,
             )
         except Exception as e2:
             print(json.dumps({"msg": "kpi_write_failed", "stage": "agentcore_exception", "error": str(e2)[:500]}))
@@ -430,6 +461,10 @@ def handler(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             end_reason=end_reason,
             error_message=err,
             latency_ms=latency_ms,
+            input_chars=len(input_text),
+            output_chars=len(text),
+            approx_input_tokens=_approx_tokens(input_text),
+            approx_output_tokens=_approx_tokens(text),
         )
     except Exception as e:
         print(json.dumps({"msg": "kpi_write_failed", "stage": "turn_end", "error": str(e)[:500]}))
