@@ -48,6 +48,8 @@ export const TENANTS_REQUIRED_ENV_VARS = [TENANTS_TABLE_NAME_ENV_VAR, USER_POOL_
 // Voice channel (Amazon Connect)
 export const VOICE_ROUTING_TABLE_NAME_ENV_VAR = 'VOICE_ROUTING_TABLE_NAME';
 export const VOICE_CONVERSATIONS_TABLE_NAME_ENV_VAR = 'VOICE_CONVERSATIONS_TABLE_NAME';
+// Blended voice pricing config (JSON string). Used to compute model-aware $/min and estimated costs.
+export const VOICE_PRICING_CONFIG_ENV_VAR = 'VOICE_PRICING_CONFIG_JSON';
 
 export const PLATFORM_ADMIN_GROUP_NAME = 'admin';
 export const CUSTOMER_ADMIN_GROUP_NAME = 'customer_admin';

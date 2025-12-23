@@ -27,7 +27,12 @@ import { GetUseCaseAdapter } from './model/get-use-case';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { BatchGetCommand, DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { AWSClientManager } from 'aws-sdk-lib';
-import { VOICE_ROUTING_TABLE_NAME_ENV_VAR, USE_CASES_TABLE_NAME_ENV_VAR, VOICE_CONVERSATIONS_TABLE_NAME_ENV_VAR } from './utils/constants';
+import {
+    VOICE_ROUTING_TABLE_NAME_ENV_VAR,
+    USE_CASES_TABLE_NAME_ENV_VAR,
+    VOICE_CONVERSATIONS_TABLE_NAME_ENV_VAR,
+    VOICE_PRICING_CONFIG_ENV_VAR
+} from './utils/constants';
 import { extractTenantId, isCustomerPrincipal, isPlatformAdmin } from './utils/utils';
 
 const commands: Map<string, CaseCommand> = new Map<string, CaseCommand>();
@@ -88,6 +93,45 @@ function parseIso(s: any): number | undefined {
     return Number.isFinite(t) ? t : undefined;
 }
 
+type VoiceModelPricing = {
+    inputPer1kUsd: number;
+    outputPer1kUsd: number;
+};
+
+type VoicePricingConfig = {
+    marginPct: number; // e.g. 0.5 = 50%
+    connectPerMinuteUsd: number; // blended telephony estimate
+    lexPerTurnUsd: number; // per Lex request/turn estimate
+    lambdaPerTurnUsd: number; // per-turn compute estimate
+    infraPerMinuteUsd: number; // misc overhead per minute
+    models: Record<string, VoiceModelPricing>; // key = model identifier (contains match)
+};
+
+function safeJsonParse<T>(s: string | undefined): T | undefined {
+    if (!s) return undefined;
+    try {
+        return JSON.parse(s) as T;
+    } catch {
+        return undefined;
+    }
+}
+
+function clamp01(n: number): number {
+    if (!Number.isFinite(n)) return 0;
+    return Math.max(0, Math.min(1, n));
+}
+
+function findModelPricing(config: VoicePricingConfig | undefined, modelHint: string | undefined): VoiceModelPricing | undefined {
+    if (!config || !config.models) return undefined;
+    const hint = (modelHint ?? '').toLowerCase();
+    if (!hint) return undefined;
+    for (const [k, v] of Object.entries(config.models)) {
+        if (!k) continue;
+        if (hint.includes(k.toLowerCase())) return v;
+    }
+    return undefined;
+}
+
 async function getVoiceUsage(event: APIGatewayEvent): Promise<any> {
     // Customer-only (admin can use other dashboards; we can broaden later)
     if (!isCustomerPrincipal(event) && !isPlatformAdmin(event)) {
@@ -141,6 +185,8 @@ async function getVoiceUsage(event: APIGatewayEvent): Promise<any> {
         totalTurns: number;
         totalLatencyMs: number;
         totalDurationSec: number;
+        approxInputTokens: number;
+        approxOutputTokens: number;
         lastCallAt?: string;
     };
 
@@ -152,7 +198,9 @@ async function getVoiceUsage(event: APIGatewayEvent): Promise<any> {
         errorCalls: 0,
         totalTurns: 0,
         totalLatencyMs: 0,
-        totalDurationSec: 0
+        totalDurationSec: 0,
+        approxInputTokens: 0,
+        approxOutputTokens: 0
     };
 
     for (const it of items) {
@@ -163,6 +211,8 @@ async function getVoiceUsage(event: APIGatewayEvent): Promise<any> {
         const hasErr = Boolean(it.LastError);
         const turns = Number(it.TurnCount ?? 0) || 0;
         const lat = Number(it.LastLatencyMs ?? 0) || 0;
+        const inTok = Number(it.ApproxInputTokens ?? 0) || 0;
+        const outTok = Number(it.ApproxOutputTokens ?? 0) || 0;
         const startedAt = typeof it.StartedAt === 'string' ? it.StartedAt : undefined;
         const endedAt = typeof it.EndedAt === 'string' ? it.EndedAt : undefined;
         const lastUpdatedAt = typeof it.LastUpdatedAt === 'string' ? it.LastUpdatedAt : undefined;
@@ -183,6 +233,8 @@ async function getVoiceUsage(event: APIGatewayEvent): Promise<any> {
             totalTurns: 0,
             totalLatencyMs: 0,
             totalDurationSec: 0,
+            approxInputTokens: 0,
+            approxOutputTokens: 0,
             lastCallAt: undefined
         };
 
@@ -207,6 +259,11 @@ async function getVoiceUsage(event: APIGatewayEvent): Promise<any> {
         agg.totalDurationSec += durSec;
         totals.totalDurationSec += durSec;
 
+        agg.approxInputTokens += inTok;
+        totals.approxInputTokens += inTok;
+        agg.approxOutputTokens += outTok;
+        totals.approxOutputTokens += outTok;
+
         if (startedAt) {
             if (!agg.lastCallAt || startedAt > agg.lastCallAt) agg.lastCallAt = startedAt;
             if (!totals.lastCallAt || startedAt > totals.lastCallAt) totals.lastCallAt = startedAt;
@@ -216,7 +273,7 @@ async function getVoiceUsage(event: APIGatewayEvent): Promise<any> {
     }
 
     const uniqueUseCaseIds = Array.from(byUseCase.keys());
-    const nameMap = new Map<string, string>();
+    const nameMap = new Map<string, { name: string; modelHint?: string }>();
     if (uniqueUseCaseIds.length > 0) {
         // BatchGet max 100 keys
         for (let i = 0; i < uniqueUseCaseIds.length; i += 100) {
@@ -226,7 +283,7 @@ async function getVoiceUsage(event: APIGatewayEvent): Promise<any> {
                     RequestItems: {
                         [useCasesTable]: {
                             Keys: chunk.map((id) => ({ UseCaseId: id })),
-                            ProjectionExpression: 'UseCaseId, UseCaseName, #n',
+                            ProjectionExpression: 'UseCaseId, UseCaseName, #n, LlmParams',
                             ExpressionAttributeNames: {
                                 '#n': 'Name'
                             }
@@ -238,17 +295,45 @@ async function getVoiceUsage(event: APIGatewayEvent): Promise<any> {
             for (const u of got) {
                 const id = u.UseCaseId;
                 const nm = u.UseCaseName ?? u.Name ?? id;
-                if (id) nameMap.set(id, String(nm));
+                const modelHint =
+                    u?.LlmParams?.BedrockLlmParams?.InferenceProfileId ??
+                    u?.LlmParams?.BedrockLlmParams?.ModelId ??
+                    u?.ModelProviderName ??
+                    undefined;
+                if (id) nameMap.set(id, { name: String(nm), modelHint: modelHint ? String(modelHint) : undefined });
             }
         }
     }
 
+    const pricingCfg = safeJsonParse<VoicePricingConfig>(process.env[VOICE_PRICING_CONFIG_ENV_VAR]);
+    const marginPct = clamp01(Number(pricingCfg?.marginPct ?? 0.5));
+    const connectPerMinuteUsd = Number(pricingCfg?.connectPerMinuteUsd ?? 0);
+    const lexPerTurnUsd = Number(pricingCfg?.lexPerTurnUsd ?? 0);
+    const lambdaPerTurnUsd = Number(pricingCfg?.lambdaPerTurnUsd ?? 0);
+    const infraPerMinuteUsd = Number(pricingCfg?.infraPerMinuteUsd ?? 0);
+
     const byUseCaseArr = Array.from(byUseCase.values())
         .map((a) => {
             const calls = a.calls || 0;
+            const billableMinutes = a.totalDurationSec > 0 ? Math.max(1, Math.ceil(a.totalDurationSec / 60)) : 0;
+            const turnsPerMin = billableMinutes > 0 ? a.totalTurns / billableMinutes : 0;
+            const inTokPerMin = billableMinutes > 0 ? a.approxInputTokens / billableMinutes : 0;
+            const outTokPerMin = billableMinutes > 0 ? a.approxOutputTokens / billableMinutes : 0;
+
+            const meta = nameMap.get(a.useCaseId);
+            const modelHint = meta?.modelHint;
+            const modelPricing = findModelPricing(pricingCfg, modelHint);
+
+            const llmCostPerMin =
+                modelPricing && billableMinutes > 0
+                    ? (inTokPerMin / 1000) * modelPricing.inputPer1kUsd + (outTokPerMin / 1000) * modelPricing.outputPer1kUsd
+                    : 0;
+            const variableCostPerMin = connectPerMinuteUsd + infraPerMinuteUsd + turnsPerMin * (lexPerTurnUsd + lambdaPerTurnUsd) + llmCostPerMin;
+            const ratePerMinuteUsd = variableCostPerMin * (1 + marginPct);
+            const estimatedCostUsd = billableMinutes > 0 ? ratePerMinuteUsd * billableMinutes : 0;
             return {
                 useCaseId: a.useCaseId,
-                useCaseName: nameMap.get(a.useCaseId) ?? a.useCaseId,
+                useCaseName: meta?.name ?? a.useCaseId,
                 calls,
                 endedCalls: a.endedCalls,
                 errorCalls: a.errorCalls,
@@ -256,12 +341,51 @@ async function getVoiceUsage(event: APIGatewayEvent): Promise<any> {
                 avgDurationSec: calls ? Math.round(a.totalDurationSec / calls) : 0,
                 avgTurns: calls ? Math.round(a.totalTurns / calls) : 0,
                 avgLatencyMs: calls ? Math.round(a.totalLatencyMs / calls) : 0,
-                lastCallAt: a.lastCallAt
+                lastCallAt: a.lastCallAt,
+                metering: {
+                    billableMinutes,
+                    approxInputTokens: a.approxInputTokens,
+                    approxOutputTokens: a.approxOutputTokens,
+                    modelHint: modelHint ?? null
+                },
+                pricing: {
+                    ratePerMinuteUsd: Number.isFinite(ratePerMinuteUsd) ? ratePerMinuteUsd : null,
+                    estimatedCostUsd: Number.isFinite(estimatedCostUsd) ? estimatedCostUsd : null,
+                    marginPct,
+                    components: {
+                        connectPerMinuteUsd,
+                        infraPerMinuteUsd,
+                        lexPerTurnUsd,
+                        lambdaPerTurnUsd,
+                        llmCostPerMinuteUsd: Number.isFinite(llmCostPerMin) ? llmCostPerMin : 0
+                    }
+                }
             };
         })
         .sort((a, b) => b.calls - a.calls);
 
     const totalCalls = totals.calls || 0;
+    const totalBillableMinutes = totals.totalDurationSec > 0 ? Math.max(1, Math.ceil(totals.totalDurationSec / 60)) : 0;
+    const totalTurnsPerMin = totalBillableMinutes > 0 ? totals.totalTurns / totalBillableMinutes : 0;
+    const totalInTokPerMin = totalBillableMinutes > 0 ? totals.approxInputTokens / totalBillableMinutes : 0;
+    const totalOutTokPerMin = totalBillableMinutes > 0 ? totals.approxOutputTokens / totalBillableMinutes : 0;
+    // Totals don't have a single model; price them using the highest known model pricing (safety).
+    const modelCandidates = Object.values(pricingCfg?.models ?? {});
+    const worstModel =
+        modelCandidates.length > 0
+            ? modelCandidates.reduce((acc, cur) =>
+                  acc.inputPer1kUsd + acc.outputPer1kUsd >= cur.inputPer1kUsd + cur.outputPer1kUsd ? acc : cur
+              )
+            : undefined;
+    const worstLlmCostPerMin =
+        worstModel && totalBillableMinutes > 0
+            ? (totalInTokPerMin / 1000) * worstModel.inputPer1kUsd + (totalOutTokPerMin / 1000) * worstModel.outputPer1kUsd
+            : 0;
+    const totalVariableCostPerMin =
+        connectPerMinuteUsd + infraPerMinuteUsd + totalTurnsPerMin * (lexPerTurnUsd + lambdaPerTurnUsd) + worstLlmCostPerMin;
+    const totalRatePerMinuteUsd = totalVariableCostPerMin * (1 + marginPct);
+    const totalEstimatedCostUsd = totalBillableMinutes > 0 ? totalRatePerMinuteUsd * totalBillableMinutes : 0;
+
     const response = {
         tenantId,
         range: { days, startIso, endIso },
@@ -275,7 +399,24 @@ async function getVoiceUsage(event: APIGatewayEvent): Promise<any> {
             avgDurationSec: totalCalls ? Math.round(totals.totalDurationSec / totalCalls) : 0,
             avgTurns: totalCalls ? Math.round(totals.totalTurns / totalCalls) : 0,
             avgLatencyMs: totalCalls ? Math.round(totals.totalLatencyMs / totalCalls) : 0,
-            lastCallAt: totals.lastCallAt ?? null
+            lastCallAt: totals.lastCallAt ?? null,
+            metering: {
+                billableMinutes: totalBillableMinutes,
+                approxInputTokens: totals.approxInputTokens,
+                approxOutputTokens: totals.approxOutputTokens
+            },
+            pricing: {
+                ratePerMinuteUsd: Number.isFinite(totalRatePerMinuteUsd) ? totalRatePerMinuteUsd : null,
+                estimatedCostUsd: Number.isFinite(totalEstimatedCostUsd) ? totalEstimatedCostUsd : null,
+                marginPct,
+                components: {
+                    connectPerMinuteUsd,
+                    infraPerMinuteUsd,
+                    lexPerTurnUsd,
+                    lambdaPerTurnUsd,
+                    llmCostPerMinuteUsd: Number.isFinite(worstLlmCostPerMin) ? worstLlmCostPerMin : 0
+                }
+            }
         },
         byUseCase: byUseCaseArr
     };

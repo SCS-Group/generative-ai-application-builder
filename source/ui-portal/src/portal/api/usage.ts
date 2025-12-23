@@ -13,6 +13,16 @@ export type VoiceUsageTotals = {
   avgTurns: number;
   avgLatencyMs: number;
   lastCallAt: string | null;
+  metering?: {
+    billableMinutes: number;
+    approxInputTokens: number;
+    approxOutputTokens: number;
+  };
+  pricing?: {
+    ratePerMinuteUsd: number | null;
+    estimatedCostUsd: number | null;
+    marginPct: number;
+  };
 };
 
 export type VoiceUsageByUseCase = {
@@ -26,6 +36,17 @@ export type VoiceUsageByUseCase = {
   avgTurns: number;
   avgLatencyMs: number;
   lastCallAt?: string;
+  metering?: {
+    billableMinutes: number;
+    approxInputTokens: number;
+    approxOutputTokens: number;
+    modelHint: string | null;
+  };
+  pricing?: {
+    ratePerMinuteUsd: number | null;
+    estimatedCostUsd: number | null;
+    marginPct: number;
+  };
 };
 
 export type VoiceUsageResponse = {
