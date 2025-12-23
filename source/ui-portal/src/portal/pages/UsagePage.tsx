@@ -117,7 +117,7 @@ export function UsagePage() {
                     <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
                       <span>{u.calls} calls</span>
                       <span>•</span>
-                      <span>{Math.round(u.totalDurationSec / 60)} min</span>
+                      <span>{u.totalDurationSec > 0 ? Math.max(1, Math.ceil(u.totalDurationSec / 60)) : 0} min</span>
                       <span>•</span>
                       <span>{u.avgDurationSec}s avg</span>
                       <span>•</span>

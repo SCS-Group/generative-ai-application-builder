@@ -165,9 +165,12 @@ async function getVoiceUsage(event: APIGatewayEvent): Promise<any> {
         const lat = Number(it.LastLatencyMs ?? 0) || 0;
         const startedAt = typeof it.StartedAt === 'string' ? it.StartedAt : undefined;
         const endedAt = typeof it.EndedAt === 'string' ? it.EndedAt : undefined;
+        const lastUpdatedAt = typeof it.LastUpdatedAt === 'string' ? it.LastUpdatedAt : undefined;
         const durSec = (() => {
             const s = parseIso(startedAt);
-            const e = parseIso(endedAt);
+            // Many calls won't have EndedAt because Connect may disconnect without a final Lex turn.
+            // Approximate duration using LastUpdatedAt (last successful agent turn).
+            const e = parseIso(endedAt ?? lastUpdatedAt);
             if (!s || !e || e < s) return 0;
             return Math.floor((e - s) / 1000);
         })();
@@ -267,7 +270,8 @@ async function getVoiceUsage(event: APIGatewayEvent): Promise<any> {
             endedCalls: totals.endedCalls,
             errorCalls: totals.errorCalls,
             totalDurationSec: totals.totalDurationSec,
-            totalDurationMinutes: Math.round(totals.totalDurationSec / 60),
+            // Billing-friendly: round up to started minute when there is any usage.
+            totalDurationMinutes: totals.totalDurationSec > 0 ? Math.max(1, Math.ceil(totals.totalDurationSec / 60)) : 0,
             avgDurationSec: totalCalls ? Math.round(totals.totalDurationSec / totalCalls) : 0,
             avgTurns: totalCalls ? Math.round(totals.totalTurns / totalCalls) : 0,
             avgLatencyMs: totalCalls ? Math.round(totals.totalLatencyMs / totalCalls) : 0,
