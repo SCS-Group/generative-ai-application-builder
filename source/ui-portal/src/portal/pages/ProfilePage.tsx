@@ -13,11 +13,10 @@ export function ProfilePage() {
           <CardTitle>Profile</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-sm text-muted-foreground">This page is intentionally empty for now.</div>
+          <div className="text-sm text-muted-foreground">Coming soon...</div>
         </CardContent>
       </Card>
     </div>
   );
 }
-
 
