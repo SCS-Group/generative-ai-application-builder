@@ -8,6 +8,7 @@ import { AgentsListPage } from '@/portal/pages/AgentsListPage';
 import { AgentDetailsPage } from '@/portal/pages/AgentDetailsPage';
 import { UsagePage } from '@/portal/pages/UsagePage';
 import { SettingsPage } from '@/portal/pages/SettingsPage';
+import { ProfilePage } from '@/portal/pages/ProfilePage';
 
 export function App({ runtimeConfig }: { runtimeConfig: RuntimeConfig }) {
   const [user, setUser] = useState<any | null>(null);
@@ -36,6 +37,7 @@ export function App({ runtimeConfig }: { runtimeConfig: RuntimeConfig }) {
         <Route path="agents/:useCaseType/:useCaseId" element={<AgentDetailsPage />} />
         <Route path="usage" element={<UsagePage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="profile" element={<ProfilePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
