@@ -1,0 +1,5 @@
+boto3==1.40.53
+botocore==1.40.53
+jsonschema==4.23.0
+requests==2.32.4
+

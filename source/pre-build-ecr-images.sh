@@ -32,11 +32,19 @@ check_prerequisites() {
         missing_tools+=("aws")
     fi
     
+    # yq is optional: only needed to parse solution-manifest.yaml for local image prebuilds.
+    # If missing, we'll skip prebuild rather than fail CDK synth/deploy for infra-only stacks.
     if ! command -v yq >/dev/null 2>&1; then
         missing_tools+=("yq")
     fi
     
     if [ ${#missing_tools[@]} -gt 0 ]; then
+        # If the only missing tool is yq, skip prebuild (infra-only workflows).
+        if [ ${#missing_tools[@]} -eq 1 ] && [ "${missing_tools[0]}" = "yq" ]; then
+            echo "⚠️  yq is not installed; skipping local ECR image pre-build."
+            echo "   (Set SKIP_ECR_PREBUILD=0 and install yq to enable local image builds.)"
+            exit 0
+        fi
         echo "❌ Missing required tools:"
         for tool in "${missing_tools[@]}"; do
             echo "  - $tool"
