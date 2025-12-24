@@ -117,6 +117,24 @@ function UserMenu() {
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
+  const handleLogout = async () => {
+    setOpen(false);
+    try {
+      // Clear local storage items that may interfere with logout
+      localStorage.removeItem('amplify-signin-with-hostedUI');
+      sessionStorage.clear();
+      
+      // Use global sign-out to be robust across Hosted UI / federated sessions.
+      await Auth.signOut({ global: true } as any);
+    } catch (err) {
+      console.error('Logout error:', err);
+      // Even if signOut fails, clear local state and redirect
+    } finally {
+      // Force a full page reload to clear all auth state
+      window.location.href = '/';
+    }
+  };
+
   return (
     <div ref={menuRef} className="relative flex items-center gap-2">
       {/* Settings cog */}
@@ -155,18 +173,7 @@ function UserMenu() {
             <button
               type="button"
               className="w-full rounded-md px-3 py-2 text-left text-sm hover:bg-muted"
-              onClick={async () => {
-                setOpen(false);
-                try {
-                  // Use global sign-out to be robust across Hosted UI / federated sessions.
-                  await Auth.signOut({ global: true } as any);
-                } catch {
-                  // ignore - we'll still force navigation below
-                } finally {
-                  // The App component only checks auth on initial mount; force a reload to reflect signed-out state.
-                  window.location.assign('/');
-                }
-              }}
+              onClick={handleLogout}
             >
               Log out
             </button>
@@ -300,5 +307,4 @@ export function AppShell() {
     </div>
   );
 }
-
 
