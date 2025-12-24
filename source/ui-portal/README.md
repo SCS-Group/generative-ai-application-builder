@@ -1,4 +1,4 @@
-## AiAgentsWorkforce Customer Portal (MVP)
+## AIAgentsWorkforce Customer Portal (MVP)
 
 This is the **customer-facing portal** UI (separate from the admin console in `../ui-deployment`).
 
@@ -27,5 +27,4 @@ npm run dev
 ### Notes
 - The portal uses the **same Cognito User Pool** and **same REST API** as the platform, but shows only tenant-scoped data.
 - The portal URL target is `portal.aiagentsworkforce.com`.
-
 

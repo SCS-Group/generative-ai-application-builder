@@ -87,9 +87,9 @@ export function LoginPage() {
           <Card>
             <CardHeader>
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg border border-border bg-muted" />
+                <div className="h-10 w-10 rounded-lg border-border bg-muted" />
                 <div className="leading-tight">
-                  <div className="text-sm font-semibold tracking-wide text-foreground">AiAgentsWorkforce</div>
+                  <div className="text-sm font-semibold tracking-wide text-foreground">AIAgentsWorkforce</div>
                   <div className="text-xs text-muted-foreground">Customer Portal</div>
                 </div>
               </div>
