@@ -10,6 +10,7 @@ import { BedrockAgent } from '../lib/bedrock-agent-stack';
 import { BedrockChat } from '../lib/bedrock-chat-stack';
 import { MCPServerStack } from '../lib/mcp-server-stack';
 import { DeploymentPlatformStack } from '../lib/deployment-platform-stack';
+import { UiAgentRunnerStack } from '../lib/ui-agent-runner-stack';
 import { BaseStack, BaseStackProps } from '../lib/framework/base-stack';
 import { SageMakerChat } from '../lib/sagemaker-chat-stack';
 import { LambdaAspects } from '../lib/utils/lambda-aspect';
@@ -22,6 +23,15 @@ const version = process.env.VERSION ?? app.node.tryGetContext('solution_version'
 const solutionName = process.env.SOLUTION_NAME ?? app.node.tryGetContext('solution_name');
 const applicationTrademarkName = app.node.tryGetContext('application_trademark_name');
 
+// Optional: limit stacks instantiated by this CDK app (speeds up synth/deploy for targeted stacks).
+// Usage:
+//   GAAB_TARGET_STACKS=UiAgentRunnerStack npx cdk deploy UiAgentRunnerStack
+const targetStacks = (process.env.GAAB_TARGET_STACKS ?? '')
+    .split(',')
+    .map((s: string) => s.trim())
+    .filter(Boolean);
+const shouldCreate = (stackName: string) => targetStacks.length === 0 || targetStacks.includes(stackName);
+
 const stackList: (typeof BaseStack)[] = [
     BedrockChat,
     SageMakerChat,
@@ -32,10 +42,17 @@ const stackList: (typeof BaseStack)[] = [
 ];
 
 for (const stack of stackList) {
-    createStack(stack, undefined, true);
+    if (shouldCreate(stack.name)) {
+        createStack(stack, undefined, true);
+    }
 }
 
-createStack(DeploymentPlatformStack, getDefaultBaseStackProps(DeploymentPlatformStack), false);
+if (shouldCreate(DeploymentPlatformStack.name)) {
+    createStack(DeploymentPlatformStack, getDefaultBaseStackProps(DeploymentPlatformStack), false);
+}
+if (shouldCreate(UiAgentRunnerStack.name)) {
+    createStack(UiAgentRunnerStack, getDefaultBaseStackProps(UiAgentRunnerStack), false);
+}
 
 // adding cdk-nag checks
 cdk.Aspects.of(app).add(new AwsSolutionsChecks(), { priority: cdk.AspectPriority.READONLY });

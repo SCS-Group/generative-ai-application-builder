@@ -1,0 +1,20 @@
+{
+  "name": "@amzn/ui-agent-dispatcher",
+  "version": "4.0.0",
+  "description": "Dispatcher lambda: consumes SQS messages and launches an ECS Fargate task per message",
+  "main": "index.ts",
+  "scripts": {
+    "build": "npx tsc",
+    "clean": "rm -rf node_modules dist",
+    "test": "echo \"no tests\""
+  },
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.150",
+    "@types/node": "^22.10.1",
+    "typescript": "^5.7.2"
+  },
+  "dependencies": {
+    "@aws-sdk/client-ecs": "^3.867.0"
+  }
+}
