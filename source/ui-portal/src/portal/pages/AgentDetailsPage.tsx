@@ -1,8 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams, Link } from 'react-router-dom';
 import { getDeploymentDetails } from '@/portal/api/deployments';
+import { getMe } from '@/portal/api/me';
+import { listPortalUsers, type PortalUser } from '@/portal/api/users';
+import { getUseCaseSupervisors, setUseCaseSupervisors } from '@/portal/api/supervisors';
 import { Card, CardContent, CardHeader, CardTitle } from '@/portal/ui/Card';
 import { Badge } from '@/portal/ui/Badge';
+import { Button } from '@/portal/ui/Button';
+import { useMemo, useState } from 'react';
+import { useToast } from '@/portal/ui/toast';
 
 function ToolsList({ tools }: { tools?: Array<{ ToolId: string }> }) {
   const ids = (tools ?? []).map((t) => t?.ToolId).filter(Boolean);
@@ -20,6 +26,9 @@ function ToolsList({ tools }: { tools?: Array<{ ToolId: string }> }) {
 
 export function AgentDetailsPage() {
   const { useCaseId, useCaseType } = useParams();
+  const { push: toast } = useToast();
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
   const q = useQuery({
     queryKey: ['portalDeploymentDetails', useCaseId, useCaseType],
     queryFn: async () => {
@@ -30,6 +39,63 @@ export function AgentDetailsPage() {
     staleTime: 0,
     refetchOnMount: 'always'
   });
+
+  const meQ = useQuery({
+    queryKey: ['portalMe'],
+    queryFn: async () => await getMe(),
+    staleTime: 30_000
+  });
+  const isCustomerAdmin = Array.isArray((meQ.data as any)?.groups) && (meQ.data as any).groups.includes('customer_admin');
+
+  const supervisorsQ = useQuery({
+    queryKey: ['portalUseCaseSupervisors', useCaseId],
+    queryFn: async () => {
+      if (!useCaseId) throw new Error('Missing useCaseId');
+      return await getUseCaseSupervisors(useCaseId);
+    },
+    enabled: Boolean(useCaseId) && Boolean(isCustomerAdmin),
+    staleTime: 0,
+    refetchOnMount: 'always'
+  });
+
+  const usersQ = useQuery({
+    queryKey: ['portalUsersForSupervisorAssign'],
+    queryFn: async () => await listPortalUsers(),
+    enabled: Boolean(assignOpen) && Boolean(isCustomerAdmin),
+    staleTime: 0
+  });
+
+  const customerUsers = useMemo(() => {
+    const all: PortalUser[] = (usersQ.data as any)?.users ?? [];
+    return all.filter((u) => (u.groupName ?? '').toLowerCase() === 'customer_user');
+  }, [usersQ.data]);
+
+  const supervisorUsernames = useMemo(() => {
+    const v: string[] = (supervisorsQ.data as any)?.usernames ?? [];
+    return Array.isArray(v) ? v : [];
+  }, [supervisorsQ.data]);
+
+  const openAssign = () => {
+    const map: Record<string, boolean> = {};
+    supervisorUsernames.forEach((u) => (map[u] = true));
+    setSelected(map);
+    setAssignOpen(true);
+  };
+
+  const saveAssign = async () => {
+    if (!useCaseId) return;
+    const usernames = Object.entries(selected)
+      .filter(([, v]) => v)
+      .map(([k]) => k);
+    try {
+      await setUseCaseSupervisors(useCaseId, usernames);
+      toast({ title: 'Saved', message: 'Supervisor assignments updated.', variant: 'success' });
+      setAssignOpen(false);
+      supervisorsQ.refetch();
+    } catch (e: any) {
+      toast({ title: 'Save failed', message: e?.message ?? 'Failed to update supervisors', variant: 'error', timeoutMs: 8000 });
+    }
+  };
 
   const d: any = q.data;
   const hasWeb = Boolean(d?.cloudFrontWebUrl);
@@ -66,7 +132,7 @@ export function AgentDetailsPage() {
       {q.isLoading ? (
         <div className="text-sm text-muted-foreground">Loading…</div>
       ) : q.isError ? (
-        <div className="text-sm text-red-600">Failed to load details.</div>
+        <div className="text-sm text-muted-foreground">Failed to load details.</div>
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Card>
@@ -113,6 +179,97 @@ export function AgentDetailsPage() {
               </pre>
             </CardContent>
           </Card>
+
+          {isCustomerAdmin && (
+            <Card className="lg:col-span-2">
+              <CardHeader>
+                <div className="flex items-center justify-between gap-4">
+                  <CardTitle>Supervisors</CardTitle>
+                  <Button type="button" variant="secondary" onClick={openAssign}>
+                    Assign supervisors
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {supervisorsQ.isLoading ? (
+                  <div className="text-sm text-muted-foreground">Loading supervisors…</div>
+                ) : supervisorUsernames.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">No supervisors assigned.</div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {supervisorUsernames.map((u) => (
+                      <Badge key={u} variant="default">
+                        {u}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {assignOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/50"
+            aria-label="Close assign supervisors modal"
+            onClick={() => setAssignOpen(false)}
+          />
+          <div className="relative w-full max-w-2xl rounded-xl border border-border bg-card p-6 shadow-xl">
+            <div className="flex items-center justify-between gap-4">
+              <div className="text-lg font-semibold">Assign supervisors</div>
+              <button
+                type="button"
+                className="rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted"
+                onClick={() => setAssignOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-4">
+              {usersQ.isLoading ? (
+                <div className="text-sm text-muted-foreground">Loading users…</div>
+              ) : customerUsers.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+                  No supervisor users exist yet. Invite a <span className="font-medium">customer_user</span> from the Users page
+                  first.
+                </div>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {customerUsers.map((u) => (
+                    <label
+                      key={u.username}
+                      className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3 hover:bg-muted/50"
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4"
+                        checked={Boolean(selected[u.username])}
+                        onChange={(e) => setSelected((prev) => ({ ...prev, [u.username]: e.target.checked }))}
+                      />
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium">{u.username}</div>
+                        <div className="mt-1 truncate text-xs text-muted-foreground">{u.email || '—'}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex items-center justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={() => setAssignOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="button" disabled={usersQ.isLoading} onClick={saveAssign}>
+                Save
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

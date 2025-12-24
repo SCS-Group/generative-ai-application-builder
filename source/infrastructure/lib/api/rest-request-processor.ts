@@ -203,6 +203,13 @@ export class RestRequestProcessor extends RequestProcessor {
         const customerAllowedArns = [
             // Customer portal identity
             this.deploymentRestEndpoint.restApi.arnForExecuteApi('GET', '/portal/me', '*'),
+            // Customer portal: invite tenant users (customer-admin only; enforced server-side)
+            this.deploymentRestEndpoint.restApi.arnForExecuteApi('GET', '/portal/users', '*'),
+            this.deploymentRestEndpoint.restApi.arnForExecuteApi('POST', '/portal/users', '*'),
+            // Customer portal: supervisor assignments (customer-user+admin; enforced server-side for admin-only write)
+            this.deploymentRestEndpoint.restApi.arnForExecuteApi('GET', '/portal/use-cases/*/supervisors', '*'),
+            this.deploymentRestEndpoint.restApi.arnForExecuteApi('PUT', '/portal/use-cases/*/supervisors', '*'),
+            this.deploymentRestEndpoint.restApi.arnForExecuteApi('GET', '/portal/my/supervised-use-cases', '*'),
             // Customer portal read-only deployment access (tenant-scoped server-side)
             this.deploymentRestEndpoint.restApi.arnForExecuteApi('GET', '/deployments', '*'),
             this.deploymentRestEndpoint.restApi.arnForExecuteApi('GET', '/deployments/*', '*'),

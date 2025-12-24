@@ -15,8 +15,9 @@ import {
   Menu as MenuIcon,
   X as CloseIcon
 } from 'lucide-react';
+import { getMe } from '@/portal/api/me';
 
-const navItems = [
+const baseNavItems = [
   { to: '/app/agents', label: 'Agents' },
   { to: '/app/usage', label: 'Usage' }
 ];
@@ -192,6 +193,13 @@ export function AppShell() {
   const [isMobile, setIsMobile] = useState<boolean>(() => window.innerWidth < 1024);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => (window.innerWidth < 1024 ? false : true));
   const [search, setSearch] = useState<string>('');
+  const [groups, setGroups] = useState<string[]>([]);
+
+  const navItems = useMemo(() => {
+    const items = [...baseNavItems];
+    if (groups.includes('customer_admin')) items.push({ to: '/app/users', label: 'Users' });
+    return items;
+  }, [groups]);
 
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1024px)');
@@ -209,6 +217,19 @@ export function AppShell() {
     apply();
     mq.addEventListener?.('change', apply);
     return () => mq.removeEventListener?.('change', apply);
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    getMe()
+      .then((m) => {
+        if (!mounted) return;
+        setGroups(Array.isArray(m.groups) ? m.groups : []);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   return (

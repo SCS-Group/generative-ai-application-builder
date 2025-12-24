@@ -43,6 +43,7 @@ import {
     MULTIMODAL_FILES_BUCKET_NAME_ENV_VAR,
     MULTIMODAL_FILES_METADATA_TABLE_NAME_ENV_VAR,
     TENANTS_TABLE_NAME_ENV_VAR,
+    SUPERVISOR_ASSIGNMENTS_TABLE_NAME_ENV_VAR,
     CUSTOMER_ADMIN_GROUP_NAME,
     CUSTOMER_USER_GROUP_NAME
 } from '../utils/constants';
@@ -252,6 +253,11 @@ export class UseCaseManagement extends BaseNestedStack {
      * DynamoDB table for platform tenants/customers
      */
     public readonly tenantsTable: dynamodb.Table;
+
+    /**
+     * DynamoDB table for supervisor assignments (tenant-scoped by UseCaseId)
+     */
+    public readonly supervisorAssignmentsTable: dynamodb.Table;
 
     /**
      * condition to check if vpc configuration should be applied to lambda functions
@@ -665,6 +671,26 @@ export class UseCaseManagement extends BaseNestedStack {
             removalPolicy: cdk.RemovalPolicy.RETAIN
         });
 
+        // Platform SaaS: supervisor assignments per deployment/use-case (tenant-scoped)
+        // - PK: tenantId
+        // - SK: assignmentId = `${useCaseId}#${username}`
+        // - GSI: tenantUser (tenantId#username) -> useCaseId (for supervisor dashboard queries)
+        this.supervisorAssignmentsTable = new dynamodb.Table(this, 'SupervisorAssignmentsTable', {
+            billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+            encryption: dynamodb.TableEncryption.AWS_MANAGED,
+            partitionKey: { name: 'tenantId', type: dynamodb.AttributeType.STRING },
+            sortKey: { name: 'assignmentId', type: dynamodb.AttributeType.STRING },
+            pointInTimeRecovery: true,
+            removalPolicy: cdk.RemovalPolicy.RETAIN
+        });
+
+        this.supervisorAssignmentsTable.addGlobalSecondaryIndex({
+            indexName: 'TenantUserIndex',
+            partitionKey: { name: 'tenantUser', type: dynamodb.AttributeType.STRING },
+            sortKey: { name: 'useCaseId', type: dynamodb.AttributeType.STRING },
+            projectionType: dynamodb.ProjectionType.ALL
+        });
+
         this.agentManagementApiLambda = new lambda.Function(this, 'AgentManagementLambda', {
             description: 'Lambda function backing the REST API for agent management',
             code: lambda.Code.fromAsset(
@@ -786,6 +812,7 @@ export class UseCaseManagement extends BaseNestedStack {
             this.deployVPCCondition
         );
         this.tenantsTable.grantReadWriteData(tenantManagementLambdaRole);
+        this.supervisorAssignmentsTable.grantReadWriteData(tenantManagementLambdaRole);
 
         tenantManagementLambdaRole.addToPolicy(
             new iam.PolicyStatement({
@@ -794,7 +821,8 @@ export class UseCaseManagement extends BaseNestedStack {
                     'cognito-idp:AdminCreateUser',
                     'cognito-idp:AdminUpdateUserAttributes',
                     'cognito-idp:AdminAddUserToGroup',
-                    'cognito-idp:AdminGetUser'
+                    'cognito-idp:AdminGetUser',
+                    'cognito-idp:ListUsersInGroup'
                 ],
                 resources: [
                     `arn:${cdk.Aws.PARTITION}:cognito-idp:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:userpool/${this.cognitoSetup.getUserPool(this).userPoolId}`
@@ -818,6 +846,7 @@ export class UseCaseManagement extends BaseNestedStack {
             deadLetterQueue: this.dlq,
             environment: {
                 [TENANTS_TABLE_NAME_ENV_VAR]: this.tenantsTable.tableName,
+                [SUPERVISOR_ASSIGNMENTS_TABLE_NAME_ENV_VAR]: this.supervisorAssignmentsTable.tableName,
                 [USER_POOL_ID_ENV_VAR]: this.cognitoSetup.getUserPool(this).userPoolId,
                 [CLIENT_ID_ENV_VAR]: this.cognitoSetup.getUserPoolClient(this).userPoolClientId
             }

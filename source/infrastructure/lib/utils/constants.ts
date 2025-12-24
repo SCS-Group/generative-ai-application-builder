@@ -61,6 +61,7 @@ export enum LLMStopReasons {
 // SaaS / multi-tenant additions (platform layer)
 // =========================
 export const TENANTS_TABLE_NAME_ENV_VAR = 'TENANTS_TABLE_NAME';
+export const SUPERVISOR_ASSIGNMENTS_TABLE_NAME_ENV_VAR = 'SUPERVISOR_ASSIGNMENTS_TABLE_NAME';
 export const PLATFORM_ADMIN_GROUP_NAME = 'admin'; // existing GAAB deployment dashboard admin group
 export const CUSTOMER_ADMIN_GROUP_NAME = 'customer_admin';
 export const CUSTOMER_USER_GROUP_NAME = 'customer_user';

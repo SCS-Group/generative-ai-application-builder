@@ -9,6 +9,8 @@ import { AgentDetailsPage } from '@/portal/pages/AgentDetailsPage';
 import { UsagePage } from '@/portal/pages/UsagePage';
 import { SettingsPage } from '@/portal/pages/SettingsPage';
 import { ProfilePage } from '@/portal/pages/ProfilePage';
+import { UsersPage } from '@/portal/pages/UsersPage';
+import { ToastProvider, Toaster } from '@/portal/ui/toast';
 
 export function App({ runtimeConfig }: { runtimeConfig: RuntimeConfig }) {
   const [user, setUser] = useState<any | null>(null);
@@ -30,17 +32,21 @@ export function App({ runtimeConfig }: { runtimeConfig: RuntimeConfig }) {
   }
 
   return (
-    <Routes>
-      <Route path="/" element={user ? <Navigate to="/app/agents" replace /> : <LoginPage />} />
-      <Route path="/app" element={user ? <AppShell /> : <Navigate to="/" replace />}>
-        <Route path="agents" element={<AgentsListPage />} />
-        <Route path="agents/:useCaseType/:useCaseId" element={<AgentDetailsPage />} />
-        <Route path="usage" element={<UsagePage />} />
-        <Route path="settings" element={<SettingsPage />} />
-        <Route path="profile" element={<ProfilePage />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <ToastProvider>
+      <Toaster />
+      <Routes>
+        <Route path="/" element={user ? <Navigate to="/app/agents" replace /> : <LoginPage />} />
+        <Route path="/app" element={user ? <AppShell /> : <Navigate to="/" replace />}>
+          <Route path="agents" element={<AgentsListPage />} />
+          <Route path="agents/:useCaseType/:useCaseId" element={<AgentDetailsPage />} />
+          <Route path="usage" element={<UsagePage />} />
+          <Route path="users" element={<UsersPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+          <Route path="profile" element={<ProfilePage />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </ToastProvider>
   );
 }
 

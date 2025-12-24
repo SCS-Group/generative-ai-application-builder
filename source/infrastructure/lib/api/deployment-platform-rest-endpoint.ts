@@ -210,6 +210,50 @@ export class DeploymentPlatformRestEndpoint extends BaseRestEndpoint {
         DeploymentRestApiHelper.configureCors(me, ['GET', 'OPTIONS']);
         me.addMethod('GET', ctx.integration, DeploymentRestApiHelper.createMethodOptionsWithModels(ctx, 'GetMe'));
 
+        // /portal/users (customer-admin invites customer-users)
+        const portalUsers = portal.addResource('users');
+        DeploymentRestApiHelper.configureCors(portalUsers, ['GET', 'POST', 'OPTIONS']);
+        portalUsers.addMethod(
+            'GET',
+            ctx.integration,
+            DeploymentRestApiHelper.createMethodOptionsWithModels(ctx, 'PortalListUsers')
+        );
+        portalUsers.addMethod(
+            'POST',
+            ctx.integration,
+            DeploymentRestApiHelper.createMethodOptionsWithModels(ctx, 'PortalInviteUser')
+        );
+
+        // /portal/use-cases/{useCaseId}/supervisors (customer-admin assigns supervisors)
+        const portalUseCases = portal.addResource('use-cases');
+        const portalUseCase = portalUseCases.addResource('{useCaseId}');
+        const portalUseCaseSupervisors = portalUseCase.addResource('supervisors');
+        DeploymentRestApiHelper.configureCors(portalUseCaseSupervisors, ['GET', 'PUT', 'OPTIONS']);
+        portalUseCaseSupervisors.addMethod(
+            'GET',
+            ctx.integration,
+            DeploymentRestApiHelper.createMethodOptionsWithModels(ctx, 'PortalGetUseCaseSupervisors', undefined, undefined, {
+                'method.request.path.useCaseId': true
+            })
+        );
+        portalUseCaseSupervisors.addMethod(
+            'PUT',
+            ctx.integration,
+            DeploymentRestApiHelper.createMethodOptionsWithModels(ctx, 'PortalSetUseCaseSupervisors', undefined, undefined, {
+                'method.request.path.useCaseId': true
+            })
+        );
+
+        // /portal/my/supervised-use-cases (customer-user dashboard query)
+        const portalMy = portal.addResource('my');
+        const supervisedUseCases = portalMy.addResource('supervised-use-cases');
+        DeploymentRestApiHelper.configureCors(supervisedUseCases, ['GET', 'OPTIONS']);
+        supervisedUseCases.addMethod(
+            'GET',
+            ctx.integration,
+            DeploymentRestApiHelper.createMethodOptionsWithModels(ctx, 'PortalMySupervisedUseCases')
+        );
+
         // /platform/tenants (admin)
         const platform = restApi.root.addResource('platform');
         const tenants = platform.addResource('tenants');
@@ -232,7 +276,20 @@ export class DeploymentPlatformRestEndpoint extends BaseRestEndpoint {
             })
         );
 
-        this.createdResources.push(portal, me, platform, tenants, tenant, tenantUsers);
+        this.createdResources.push(
+            portal,
+            me,
+            portalUsers,
+            portalUseCases,
+            portalUseCase,
+            portalUseCaseSupervisors,
+            portalMy,
+            supervisedUseCases,
+            platform,
+            tenants,
+            tenant,
+            tenantUsers
+        );
     }
 
     /**
