@@ -220,7 +220,7 @@ export function AppShell() {
           )}
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-lg border border-border bg-muted" />
-            <div className="text-sm font-semibold tracking-wide">AiAgentsWorkforce</div>
+            <div className="text-sm font-semibold tracking-wide">AIAgentsWorkforce</div>
           </div>
         </div>
 
